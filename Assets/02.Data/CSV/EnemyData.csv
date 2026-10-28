@@ -1,0 +1,9 @@
+﻿Id,Name,Element,MaxHp,Attack,Defense,MoveSpeed,ExpReward,ContactDamage,PrefabKey,Description
+1001,화염 도깨비,Fire,90,14,3,2.2,10,8,Enemy_FireGoblin,근접 추격형
+1002,물귀신,Water,110,12,5,1.9,12,7,Enemy_WaterGhost,체력이 높은 근접형
+1003,흙 인형,Earth,160,16,10,1.3,15,10,Enemy_EarthGolem,방어력이 높은 중장형
+1004,바람 요괴,Wind,75,11,2,3.2,11,6,Enemy_WindSpirit,빠른 이동형
+1005,화염 정령,Fire,65,18,1,2.7,14,9,Enemy_FireSpirit,공격력 높은 경량형
+1006,물 정령,Water,85,13,4,2.5,13,7,Enemy_WaterSpirit,표준형
+1007,산적 대장,Earth,240,22,8,1.7,35,13,Enemy_BanditLeader,중형 정예 적
+1008,풍백의 사자,Wind,180,20,5,3,30,11,Enemy_WindElite,고속 정예 적
