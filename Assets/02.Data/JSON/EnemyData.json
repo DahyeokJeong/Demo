@@ -1,0 +1,76 @@
+{
+    "Items": [
+        {
+            "Id": 1001,
+            "Name": "화염 도깨비",
+            "Element": "Fire",
+            "MaxHp": 90,
+            "Attack": 14,
+            "PrefabKey": "Enemy_FireGoblin",
+            "Description": "근접 추격형"
+        },
+        {
+            "Id": 1002,
+            "Name": "물귀신",
+            "Element": "Water",
+            "MaxHp": 110,
+            "Attack": 12,
+            "PrefabKey": "Enemy_WaterGhost",
+            "Description": "체력이 높은 근접형"
+        },
+        {
+            "Id": 1003,
+            "Name": "흙 인형",
+            "Element": "Earth",
+            "MaxHp": 160,
+            "Attack": 16,
+            "PrefabKey": "Enemy_EarthGolem",
+            "Description": "방어력이 높은 중장형"
+        },
+        {
+            "Id": 1004,
+            "Name": "바람 요괴",
+            "Element": "Wind",
+            "MaxHp": 75,
+            "Attack": 11,
+            "PrefabKey": "Enemy_WindSpirit",
+            "Description": "빠른 이동형"
+        },
+        {
+            "Id": 1005,
+            "Name": "화염 정령",
+            "Element": "Fire",
+            "MaxHp": 65,
+            "Attack": 18,
+            "PrefabKey": "Enemy_FireSpirit",
+            "Description": "공격력 높은 경량형"
+        },
+        {
+            "Id": 1006,
+            "Name": "물 정령",
+            "Element": "Water",
+            "MaxHp": 85,
+            "Attack": 13,
+            "PrefabKey": "Enemy_WaterSpirit",
+            "Description": "표준형"
+        },
+        {
+            "Id": 1007,
+            "Name": "산적 대장",
+            "Element": "Earth",
+            "MaxHp": 240,
+            "Attack": 22,
+            "PrefabKey": "Enemy_BanditLeader",
+            "Description": "중형 정예 적"
+        },
+        {
+            "Id": 1008,
+            "Name": "풍백의 사자",
+            "Element": "Wind",
+            "MaxHp": 180,
+            "Attack": 20,
+            "PrefabKey": "Enemy_WindElite",
+            "Description": "고속 정예 적"
+        }
+    ]
+}

@@ -1,283 +1,195 @@
+
+using System;
 using System.IO;
-using System.IO.Compression;
-using System.Linq;
-using System.Xml.Linq;
+using System.Collections;
 using System.Collections.Generic;
+using System.Reflection;
+using System.Globalization;
 using UnityEditor;
 using UnityEngine;
 
 public static class ExcelImporter
 {
+    private const string ExcelRelativePath = "02.Data/Excel/ExcelData.xlsx";
+    private const string JsonRelativePath = "02.Data/JSON";
+
     [MenuItem("Tools/Data/Read Excel")]
     public static void ReadExcel()
     {
-        string path = Path.Combine(Application.dataPath, "02.Data/Excel/ExcelData.xlsx");
+        string excelPath = Path.Combine(
+            Application.dataPath,
+            ExcelRelativePath
+        );
 
-        if (!File.Exists(path))
+        if (!File.Exists(excelPath))
         {
-            Debug.LogError("Excel 파일을 찾을 수 없습니다.");
+            Debug.LogError($"Excel 파일을 찾을 수 없습니다: {excelPath}");
             return;
         }
 
-        using ZipArchive archive = ZipFile.OpenRead(path);
+        List<string> sheetNames = ExcelReader.GetSheetNames(excelPath);
 
-        ZipArchiveEntry entry = archive.GetEntry("xl/workbook.xml");
+        Dictionary<string, Type> typeDic = FindExcelDataTypes();
 
-        if (entry == null)
+        foreach (string sheetName in sheetNames)
         {
-            Debug.LogError("workbook.xml을 찾을 수 없습니다.");
-            return;
-        }
-
-        using Stream stream = entry.Open();
-        using StreamReader reader = new StreamReader(stream);
-
-        XDocument document = XDocument.Load(reader);
-        XNamespace ns = document.Root.Name.Namespace;
-        XElement sheets = document.Root.Element(ns + "sheets");
-
-        if (sheets == null)
-        {
-            Debug.LogError("sheets 요소를 찾을 수 없습니다.");
-            return;
-        }
-
-        foreach (XElement sheet in sheets.Elements(ns + "sheet"))
-        {
-            string sheetName = sheet.Attribute("name")?.Value ?? "";
-
-            XAttribute relationshipAttribute = sheet.Attributes()
-                .FirstOrDefault(attribute =>
-                    attribute.Name.LocalName == "id" &&
-                    attribute.Name.NamespaceName.Contains("relationships"));
-
-            if (relationshipAttribute == null)
+            if (!typeDic.TryGetValue(sheetName, out Type dataType))
             {
-                Debug.LogError($"{sheetName}의 관계 ID를 찾을 수 없습니다.");
+                Debug.LogWarning(
+                    $"시트에 연결된 데이터 클래스를 찾을 수 없습니다: {sheetName}"
+                );
                 continue;
             }
 
-            Debug.Log($"시트 이름: {sheetName} / 관계 ID: {relationshipAttribute.Value}");
+            ImportSheet(excelPath, sheetName, dataType);
         }
+    }
 
-        ZipArchiveEntry relsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
+    private static Dictionary<string, Type> FindExcelDataTypes()
+    {
+        Dictionary<string, Type> typeDic =
+            new Dictionary<string, Type>();
 
-        if (relsEntry == null)
+        foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
         {
-            Debug.LogError("workbook.xml.rels를 찾을 수 없습니다.");
-            return;
-        }
+            Type[] types;
 
-        using Stream relsStream = relsEntry.Open();
-        using StreamReader relsReader = new StreamReader(relsStream);
-
-        XDocument relsDocument = XDocument.Load(relsReader);
-        XNamespace relsNs = relsDocument.Root.Name.Namespace;
-
-        Dictionary<string, string> relationshipDic =
-            new Dictionary<string, string>();
-
-        foreach (XElement relationship in relsDocument.Root.Elements(relsNs + "Relationship"))
-        {
-            string id = relationship.Attribute("Id")?.Value;
-            string target = relationship.Attribute("Target")?.Value;
-
-            if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(target))
-                continue;
-
-            relationshipDic[id] = target;
-        }
-
-        Debug.Log($"저장된 관계 정보 수: {relationshipDic.Count}");
-
-        List<string> sharedStrings = new List<string>();
-
-        ZipArchiveEntry sharedEntry = archive.GetEntry("xl/sharedStrings.xml");
-
-        if (sharedEntry != null)
-        {
-            using Stream sharedStream = sharedEntry.Open();
-            using StreamReader sharedReader = new StreamReader(sharedStream);
-
-            XDocument sharedDocument = XDocument.Load(sharedReader);
-            XNamespace sharedNs = sharedDocument.Root.Name.Namespace;
-
-            foreach (XElement item in sharedDocument.Root.Elements(sharedNs + "si"))
+            try
             {
-                sharedStrings.Add(item.Value);
+                types = assembly.GetTypes();
             }
-        }
-
-        Debug.Log($"공유 문자열 개수: {sharedStrings.Count}");
-
-        foreach (XElement sheet in sheets.Elements(ns + "sheet"))
-        {
-            string sheetName = sheet.Attribute("name")?.Value ?? "";
-
-            XAttribute relationshipAttribute = sheet.Attributes()
-                .FirstOrDefault(attribute =>
-                    attribute.Name.LocalName == "id" &&
-                    attribute.Name.NamespaceName.Contains("relationships"));
-
-            if (relationshipAttribute == null)
-                continue;
-
-            string relationshipId = relationshipAttribute.Value;
-
-            if (!relationshipDic.TryGetValue(relationshipId, out string target))
+            catch (ReflectionTypeLoadException e)
             {
-                Debug.LogError($"{sheetName}의 XML 경로를 찾을 수 없습니다.");
-                continue;
+                types = e.Types;
             }
 
-            if (sheetName != "EnemyData")
-                continue;
-
-            string sheetPath = target.TrimStart('/');
-            ZipArchiveEntry sheetEntry = archive.GetEntry(sheetPath);
-
-            if (sheetEntry == null)
+            foreach (Type type in types)
             {
-                Debug.LogError($"{sheetName}의 XML 파일을 찾을 수 없습니다.");
-                continue;
-            }
+                if (type == null || !type.IsClass || type.IsAbstract)
+                    continue;
 
-            using Stream sheetStream = sheetEntry.Open();
-            using StreamReader sheetReader = new StreamReader(sheetStream);
+                ExcelSheetAttribute attribute =
+                    type.GetCustomAttribute<ExcelSheetAttribute>();
 
-            XDocument sheetDocument = XDocument.Load(sheetReader);
-            XNamespace sheetNs = sheetDocument.Root.Name.Namespace;
-            XElement sheetData = sheetDocument.Root.Element(sheetNs + "sheetData");
+                if (attribute == null)
+                    continue;
 
-            if (sheetData == null)
-            {
-                Debug.LogError("sheetData를 찾을 수 없습니다.");
-                continue;
-            }
-
-            Debug.Log($"시트 XML 읽기 성공: {sheetName}");
-
-            HashSet<string> cellTypes = new HashSet<string>();
-            Dictionary<int, string> headers = new Dictionary<int, string>();
-
-            List<Dictionary<string, string>> rows =
-                new List<Dictionary<string, string>>();
-
-            foreach (XElement row in sheetData.Elements(sheetNs + "row"))
-            {
-                string rowNumber = row.Attribute("r")?.Value ?? "";
-                bool isHeader = rowNumber == "1";
-
-                Dictionary<string, string> rowData =
-                    new Dictionary<string, string>();
-
-                foreach (XElement cell in row.Elements(sheetNs + "c"))
+                if (typeDic.ContainsKey(attribute.SheetName))
                 {
-                    string cellAddress = cell.Attribute("r")?.Value ?? "";
-                    string cellType = cell.Attribute("t")?.Value ?? "n";
-                    string cellValue = GetCellValue(cell, sheetNs, sharedStrings);
-                    int columnIndex = GetColumnIndex(cellAddress);
+                    Debug.LogError(
+                        $"중복된 Excel 시트 등록: {attribute.SheetName}"
+                    );
+                    continue;
+                }
 
-                    if (isHeader)
-                    {
-                        headers[columnIndex] = cellValue;
-                    }
-                    else
-                    {
-                        if (headers.TryGetValue(columnIndex, out string headerName))
-                        {
-                            rowData[headerName] = cellValue;
-                        }
-                    }
+                typeDic.Add(attribute.SheetName, type);
+            }
+        }
 
-                    cellTypes.Add(cellType);
+        return typeDic;
+    }
 
-                    Debug.Log(
-                        $"행: {rowNumber} / 셀: {cellAddress} / 타입: {cellType} / 값: {cellValue}"
+    private static void ImportSheet(
+        string excelPath,
+        string sheetName,
+        Type dataType)
+    {
+        List<Dictionary<string, string>> rows =
+            ExcelReader.Read(excelPath, sheetName);
+
+        if (rows.Count == 0)
+        {
+            Debug.LogWarning($"변환할 데이터가 없습니다: {sheetName}");
+            return;
+        }
+
+        Type loaderType = typeof(DataLoader<>).MakeGenericType(dataType);
+
+        object loader = Activator.CreateInstance(loaderType);
+
+        FieldInfo itemsField = loaderType.GetField("Items");
+
+        IList dataList = (IList)itemsField.GetValue(loader);
+
+        foreach (Dictionary<string, string> rowData in rows)
+        {
+            object dataObject = Activator.CreateInstance(dataType);
+
+            foreach (KeyValuePair<string, string> data in rowData)
+            {
+                FieldInfo field = dataType.GetField(data.Key);
+
+                if (field == null)
+                {
+                    Debug.LogWarning(
+                        $"{dataType.Name} 필드를 찾을 수 없습니다: {data.Key}"
+                    );
+                    continue;
+                }
+
+                if (string.IsNullOrWhiteSpace(data.Value))
+                    continue;
+
+                try
+                {
+                    object convertedValue = Convert.ChangeType(
+                        data.Value,
+                        field.FieldType,
+                        CultureInfo.InvariantCulture
+                    );
+
+                    field.SetValue(dataObject, convertedValue);
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError(
+                        $"데이터 변환 실패 / 시트: {sheetName} / " +
+                        $"필드: {data.Key} / 값: {data.Value} / 오류: {e.Message}"
                     );
                 }
-
-                if (!isHeader && rowData.Count > 0)
-                {
-                    rows.Add(rowData);
-                }
             }
 
-            foreach (KeyValuePair<int, string> header in headers)
-            {
-                Debug.Log($"열 인덱스: {header.Key} / 헤더: {header.Value}");
-            }
-
-            foreach (string type in cellTypes)
-            {
-                Debug.Log($"발견된 셀 타입: {type}");
-            }
-
-            Debug.Log($"저장된 데이터 행 수: {rows.Count}");
-
-            foreach (Dictionary<string, string> rowData in rows)
-            {
-                foreach (KeyValuePair<string, string> data in rowData)
-                {
-                    Debug.Log($"{data.Key} : {data.Value}");
-                }
-            }
+            dataList.Add(dataObject);
         }
-    }
 
-    private static string GetCellValue(
-        XElement cell,
-        XNamespace ns,
-        List<string> sharedStrings)
-    {
-        string cellType = cell.Attribute("t")?.Value ?? "n";
+        string json = JsonUtility.ToJson(loader, true);
 
-        switch (cellType)
+        string outputDirectory = Path.Combine(
+            Application.dataPath,
+            JsonRelativePath
+        );
+
+        Directory.CreateDirectory(outputDirectory);
+
+        string fileName = $"{sheetName}.json";
+
+        string outputPath = Path.Combine(
+            outputDirectory,
+            fileName
+        );
+
+        File.WriteAllText(outputPath, json);
+
+        AssetDatabase.Refresh();
+
+        string assetPath = $"Assets/{JsonRelativePath}/{fileName}";
+
+        bool registered = AddressableRegistrar.Register(
+            assetPath,
+            sheetName
+        );
+
+        if (!registered)
         {
-            case "inlineStr":
-                XElement inlineString = cell.Element(ns + "is");
-                return inlineString?.Value ?? "";
-
-            case "n":
-            case "str":
-                XElement valueElement = cell.Element(ns + "v");
-                return valueElement?.Value ?? "";
-
-            case "s":
-                string indexText = cell.Element(ns + "v")?.Value;
-
-                if (!int.TryParse(indexText, out int index))
-                {
-                    Debug.LogWarning("공유 문자열 인덱스를 변환할 수 없습니다.");
-                    return "";
-                }
-
-                if (index < 0 || index >= sharedStrings.Count)
-                {
-                    Debug.LogWarning($"잘못된 공유 문자열 인덱스: {index}");
-                    return "";
-                }
-
-                return sharedStrings[index];
-
-            default:
-                Debug.LogWarning($"아직 지원하지 않는 셀 타입: {cellType}");
-                return "";
-        }
-    }
-
-    private static int GetColumnIndex(string cellAddress)
-    {
-        int column = 0;
-
-        foreach (char c in cellAddress)
-        {
-            if (c < 'A' || c > 'Z')
-                break;
-
-            column = column * 26 + (c - 'A' + 1);
+            Debug.LogError(
+                $"Addressables 등록 실패: {sheetName}"
+            );
+            return;
         }
 
-        return column - 1;
+        Debug.Log(
+            $"데이터 변환 완료 / 시트: {sheetName} / " +
+            $"타입: {dataType.Name} / 개수: {dataList.Count}"
+        );
     }
 }

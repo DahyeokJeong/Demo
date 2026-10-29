@@ -79,8 +79,8 @@ public static class CsvImporter
         Debug.Log(
             $"Enemy 생성 완료 / " +
             $"Id: {enemy.Id}, " +
-            $"Name: {enemy.Name}, " +
-            $"Hp: {enemy.Hp}"
+            $"Name: {enemy.Name}, " 
+           // $"Hp: {enemy.Hp}"
         );
     }
 
@@ -95,6 +95,6 @@ public static class CsvImporter
 
         field.SetValue(enemy, 100);
 
-        Debug.Log($"Enemy HP : {enemy.Hp}");
+        //Debug.Log($"Enemy HP : {enemy.Hp}");
     }
 }
